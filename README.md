@@ -135,7 +135,7 @@ git clone https://github.com/vijayahir5227/Invara-invoice-management-app.git
 ### **3. Install Server Dependencies**
 
 ``` bash
-cd Invara/invara-node-backend
+cd Invara-invoice-management-app-main/invara-node-backend
 npm install
 ```
 
