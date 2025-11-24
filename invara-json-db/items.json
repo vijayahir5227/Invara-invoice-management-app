@@ -1,0 +1,24 @@
+{
+  "_id": {
+    "$oid": "692434289c35a43db1b3a138"
+  },
+  "productId": "PROD001",
+  "itemName": "apple",
+  "amount": 100,
+  "category": "Fruits",
+  "taxPercentage": 5,
+  "email": "ahirvijay621@gmail.com",
+  "__v": 0
+}
+{
+  "_id": {
+    "$oid": "692434369c35a43db1b3a13b"
+  },
+  "productId": "PROD002",
+  "itemName": "carrot",
+  "amount": 30,
+  "category": "Vegetables",
+  "taxPercentage": 12,
+  "email": "ahirvijay621@gmail.com",
+  "__v": 0
+}

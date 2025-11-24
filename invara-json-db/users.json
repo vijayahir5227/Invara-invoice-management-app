@@ -1,0 +1,13 @@
+{
+  "_id": {
+    "$oid": "692434149c35a43db1b3a134"
+  },
+  "companyName": "Krishna Grocery Store",
+  "fullName": "Vinay Kumar",
+  "password": "123456",
+  "mobileNumber": "9326532156",
+  "email": "ahirvijay621@gmail.com",
+  "address": "Rajkot",
+  "createdAt": 1763980308393,
+  "__v": 0
+}
