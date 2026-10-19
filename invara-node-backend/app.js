@@ -2,9 +2,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
 const nodemailer = require("nodemailer");
-const crypto = require("crypto");
-const path = require("path");
-const { body, validationResult } = require("express-validator");
+const crypto = require("crypto"); // For MD5 hashing email
 
 const app = express();
 app.use(bodyParser.json());
@@ -12,21 +10,19 @@ app.use(bodyParser.json());
 // MongoDB Connection
 mongoose
   .connect(
-    "mongodb://127.0.0.1:27017/invara",
+    "mongodb+srv://luharkaushik1234_db_user:aaJ77jeLyLib9J93@cluster0.fhdcymy.mongodb.net/",
     {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     }
   )
-  .then(() => console.log("✅ MongoDB connected"))
-  .catch((err) => console.error("❌ MongoDB connection error:", err));
+  .then(() => console.log("MongoDB connected"))
+  .catch((err) => console.error("MongoDB connection error:", err));
 
-// ================== Schemas & Models ==================
-
-// User Schema
+// User Schema and Model
 const userSchema = new mongoose.Schema({
   companyName: String,
-  fullName: String,
+  fullName: String,  
   password: String,
   mobileNumber: String,
   email: { type: String, unique: true },
@@ -35,23 +31,20 @@ const userSchema = new mongoose.Schema({
 });
 const User = mongoose.model("User", userSchema);
 
-// Item Schema (Updated to include taxPercentage)
+// Item Schema and Model
 const itemSchema = new mongoose.Schema({
   productId: { type: String, unique: true, required: true },
   itemName: { type: String, unique: true },
   amount: Number,
-  category: String,
-  taxPercentage: { type: Number, default: 0 },  // New field for tax percentage
-  email: String
+  category: String,  
 });
 const Item = mongoose.model("Item", itemSchema);
 
-// Invoice Schema (Uses updated item schema array)
+// Invoice Schema and Model
 const invoiceSchema = new mongoose.Schema({
   billNumber: { type: String, unique: true },
   billDate: Number,
   partyName: String,
-  email: String,
   items: [
     {
       itemName: String,
@@ -59,65 +52,70 @@ const invoiceSchema = new mongoose.Schema({
       amount: Number,
       total: Number,
       category: String,
-      taxPercentage: { type: Number, default: 0 }  // Include taxPercentage in invoice items as well
     },
   ],
-  paymentStatus: String,
   taxAmount: Number,
+  paymentStatus: String,
   grandTotal: Number,
 });
 const Invoice = mongoose.model("Invoice", invoiceSchema);
 
-// ================== Helpers ==================
+// Helper: MD5 hash of email
 function md5(email) {
   return crypto.createHash("md5").update(email).digest("hex");
 }
 
-// ================== APIs ==================
-
-// Signup
+// Signup API
 app.post("/api/signup", async (req, res) => {
   try {
-    let email = req.body.email.toLowerCase().replace(/\s+/g, "");
-
+    let email = req.body.email.toLowerCase().replace(/\s+/g, ''); // remove spaces and lowercase
+    
+    // Split email into local part and domain part
     const [localPart, domainPart] = email.split("@");
+    
     if (!domainPart) {
       return res.status(400).json({ error: "Invalid email format" });
     }
-
-    const cleanedLocal = localPart.replace(/[^a-z0-9]/g, "");
+    
+    // Remove all non-alphanumeric characters from local part
+    const cleanedLocal = localPart.replace(/[^a-z0-9]/g, '');
+    
+    // Rejoin cleaned email
     email = `${cleanedLocal}@${domainPart}`;
+    
     req.body.email = email;
 
-    const existingEmail = await User.findOne({ email });
-    if (existingEmail) {
+    // Check duplicate email explicitly
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
       return res.status(400).json({ error: "Email already registered" });
     }
 
     const user = new User({ ...req.body });
     await user.save();
-
-    res.json({ message: "Signup successful" });
+    res.json({ message: "Signup Successful" });
   } catch (err) {
-    console.error("Signup error:", err);
-    res.status(500).json({ error: "Server error" });
+    if (err.code === 11000) {
+      return res.status(400).json({ error: "Username or Email already exists" });
+    }
+    res.status(400).json({ error: err.message });
   }
 });
 
-// Login
-app.post("/api/login", async (req, res) => {
-  const { email, password } = req.body;
-  try {
-    const user = await User.findOne({ email, password });
-    if (!user) return res.status(401).json({ error: "Invalid credentials" });
 
+// Login API
+app.post("/api/login", async (req, res) => {
+  const { usernameOrEmail, password } = req.body;
+  try {
+    const user = await User.findOne({ usernameOrEmail, password });
+    if (!user) return res.status(401).json({ error: "Invalid credentials" });
     res.json({ message: "Login successful" });
   } catch (err) {
     res.status(500).json({ error: "Server error" });
   }
 });
 
-// Create Invoice
+// Create Invoice API
 app.post("/api/invoice/create", async (req, res) => {
   try {
     const invoice = new Invoice({ ...req.body });
@@ -128,7 +126,7 @@ app.post("/api/invoice/create", async (req, res) => {
   }
 });
 
-// Add Item
+// Add Item API
 app.post("/api/item/add", async (req, res) => {
   try {
     const item = new Item({ ...req.body });
@@ -136,102 +134,23 @@ app.post("/api/item/add", async (req, res) => {
     res.json({ message: "Item added" });
   } catch (err) {
     if (err.code === 11000) {
-      return res
-        .status(400)
-        .json({ error: "Item name or productId must be unique" });
+      return res.status(400).json({ error: "Item name must be unique" });
     }
     res.status(400).json({ error: err.message });
   }
 });
 
-// View Invoices
-app.post("/api/invoice/view", async (req, res) => {
-  const { email } = req.body;
-  if (!email) {
-    return res.status(400).json({ error: "Email is required" });
-  }
+// View Invoice API
+app.get("/api/invoice/view", async (req, res) => {
   try {
-    const invoices = await Invoice.find({ email });
+    const invoices = await Invoice.find({});
     res.json(invoices);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Get latest invoice number with prefix "INV"
-app.post('/api/invoice/latestNumber', 
-  body('email').isEmail().withMessage('Valid email required'), 
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
-
-    try {
-      const email = req.body.email.toLowerCase();
-
-      const latestInvoice = await Invoice.aggregate([
-        { $match: { email } },
-        {
-          $addFields: {
-            billNumberInt: {
-              $toInt: { $substr: ["$billNumber", 3, -1] }
-            }
-          }
-        },
-        { $sort: { billNumberInt: -1 } },
-        { $limit: 1 }
-      ]);
-
-      let latestBillNumber = "INV000";
-      if (latestInvoice.length > 0 && latestInvoice[0].billNumber) {
-        latestBillNumber = latestInvoice[0].billNumber;
-      }
-
-      res.json({ latestBillNumber });
-
-    } catch (err) {
-      console.error('Error fetching latest invoice number:', err);
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  }
-);
-
-// Get latest product id 
-app.post("/api/item/latestProductId", 
-  body("email").isEmail().withMessage("Valid email required"), 
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
-
-    try {
-      const email = req.body.email.toLowerCase();
-
-      const latestItem = await Item.aggregate([
-        { $match: { email } },
-        {
-          $addFields: {
-            productIdInt: {
-              $toInt: { $substr: ["$productId", 4, -1] }  // strip "PROD" prefix starting at index 4
-            }
-          }
-        },
-        { $sort: { productIdInt: -1 } },
-        { $limit: 1 }
-      ]);
-
-      let latestProductId = "PROD000";
-      if (latestItem.length > 0 && latestItem[0].productId) {
-        latestProductId = latestItem[0].productId;
-      }
-
-      res.json({ latestProductId });
-
-    } catch (err) {
-      console.error("Error fetching latest product ID:", err);
-      res.status(500).json({ error: "Internal server error" });
-    }
-});
-
-// Manage Invoice (Edit)
+// Manage Invoice API (Edit)
 app.put("/api/invoice/manage/:billNumber", async (req, res) => {
   try {
     const invoice = await Invoice.findOneAndUpdate(
@@ -240,53 +159,42 @@ app.put("/api/invoice/manage/:billNumber", async (req, res) => {
       { new: true }
     );
     if (!invoice) return res.status(404).json({ error: "Invoice not found" });
-
     res.json({ message: "Invoice updated", invoice });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
-// Change Password
+// Change Password API (requires old password)
 app.post("/api/user/change-password", async (req, res) => {
-  const { email, oldPassword, newPassword, confirmPassword } = req.body;
-
-  if (newPassword !== confirmPassword) {
+  const { usernameOrEmail, oldPassword, newPassword, confirmPassword } =
+    req.body;
+  if (newPassword !== confirmPassword)
     return res.status(400).json({ error: "Passwords do not match" });
-  }
-
   try {
-    const user = await User.findOne({ email, password: oldPassword });
+    const user = await User.findOne({ usernameOrEmail, password: oldPassword });
     if (!user) return res.status(401).json({ error: "Old password incorrect" });
-
     user.password = newPassword;
     await user.save();
-
     res.json({ message: "Password changed" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// View Items
-app.post("/api/item/view", async (req, res) => {
-  const { email } = req.body;
-  if (!email) {
-    return res.status(400).json({ error: "Email is required" });
-  }
+// View Item API
+app.get("/api/item/view", async (req, res) => {
   try {
-    const items = await Item.find({ email });
+    const items = await Item.find({});
     res.json(items);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Get User Info
 app.get("/api/user/info", async (req, res) => {
   const { email } = req.query;
-  if (!email)
-    return res.status(400).json({ error: "Email parameter is required" });
+  if (!email) return res.status(400).json({ error: "Email parameter is required" });
 
   try {
     const user = await User.findOne({ email });
@@ -297,7 +205,7 @@ app.get("/api/user/info", async (req, res) => {
       fullName: user.fullName,
       mobileNumber: user.mobileNumber,
       email: user.email,
-      address: user.address,
+      address: user.address,      
     };
 
     res.json(userInfo);
@@ -306,34 +214,40 @@ app.get("/api/user/info", async (req, res) => {
   }
 });
 
-// Forget Password
+
+// Forget Password API - send reset link with email MD5 hash
 app.post("/api/user/forget-password", async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: "Email is required" });
 
   try {
+    // Check if user exists with the given email
     const user = await User.findOne({ email });
 
     if (!user) {
+      // User does not exist — respond clearly
       return res.json({
         exists: false,
         message: `User with email ${email} does not exist.`,
       });
     }
 
+    // User exists, generate MD5 hash and reset link
     const emailHash = md5(email);
     const resetLink = `https://invara-backend.onrender.com/reset-password.html?emailHash=${emailHash}`;
 
+    // Create Nodemailer transporter with Gmail SMTP and app password
     const transporter = nodemailer.createTransport({
       host: "smtp.gmail.com",
       port: 465,
       secure: true,
       auth: {
         user: "shivamdigital850@gmail.com",
-        pass: "pyms jkcu edbg ipxf", 
+        pass: "pyms jkcu edbg ipxf", // Your Gmail app password
       },
     });
 
+    // Email options
     const mailOptions = {
       from: '"shivam digital" <shivamdigital850@gmail.com>',
       to: email,
@@ -343,8 +257,11 @@ app.post("/api/user/forget-password", async (req, res) => {
              <p>If you did not request this, please ignore this message.</p>`,
     };
 
-    await transporter.sendMail(mailOptions);
+    // Send reset email
+    const info = await transporter.sendMail(mailOptions);
+    console.log("Email sent:", info.response);
 
+    // Respond saying user exists and email sent
     res.json({
       exists: true,
       message: `Password reset link sent to ${email}.`,
@@ -355,34 +272,32 @@ app.post("/api/user/forget-password", async (req, res) => {
   }
 });
 
-// Serve static files
+// Serve static files (including reset-password.html)
+const path = require("path");
 app.use(express.static(path.join(__dirname, "public")));
 
-// Reset Password
+
+// Reset Password API (no old password needed, identified by emailHash)
 app.post("/api/user/reset-password", async (req, res) => {
   const { emailHash, newPassword, confirmPassword } = req.body;
-
   if (!emailHash || !newPassword || !confirmPassword) {
-    return res.status(400).json({
-      error: "Email hash, new password and confirmation are required",
-    });
+    return res
+      .status(400)
+      .json({
+        error: "Email hash, new password and confirmation are required",
+      });
   }
-
   if (newPassword !== confirmPassword) {
     return res.status(400).json({ error: "Passwords do not match" });
   }
-
   try {
     const users = await User.find({});
     const user = users.find((u) => md5(u.email) === emailHash);
-
     if (!user) {
       return res.status(400).json({ error: "Invalid password reset link" });
     }
-
     user.password = newPassword;
     await user.save();
-
     res.json({ message: "Password reset successful" });
   } catch (err) {
     console.error("Error resetting password:", err);
@@ -390,14 +305,11 @@ app.post("/api/user/reset-password", async (req, res) => {
   }
 });
 
-// Delete Invoice
+// Delete Invoice Api
 app.delete("/api/invoice/delete/:billNumber", async (req, res) => {
   try {
-    const invoice = await Invoice.findOneAndDelete({
-      billNumber: req.params.billNumber,
-    });
+    const invoice = await Invoice.findOneAndDelete({ billNumber: req.params.billNumber });
     if (!invoice) return res.status(404).json({ error: "Invoice not found" });
-
     res.json({ message: "Invoice deleted successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -406,5 +318,5 @@ app.delete("/api/invoice/delete/:billNumber", async (req, res) => {
 
 // Start server
 app.listen(3000, () => {
-  console.log("🚀 Server running on port 3000");
+  console.log("Server running on port 3000");
 });
